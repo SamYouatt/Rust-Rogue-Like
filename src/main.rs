@@ -125,13 +125,6 @@ impl Object {
         }
     }
 
-    pub fn move_by(&mut self, dx: i32, dy: i32, game: &Game) {
-        if !game.map[(self.x + dx) as usize][(self.y + dy) as usize].blocked {
-            self.x += dx;
-            self.y += dy;
-        }       
-    }
-
     pub fn draw(&self, con: &mut dyn Console) {
         con.set_default_foreground(self.color);
         con.put_char(self.x, self.y, self.char, BackgroundFlag::None);
@@ -245,7 +238,7 @@ fn make_map(objects: &mut Vec<Object>) -> Map {
             
             if rooms.is_empty() {
                 // place the player in the first room
-                objects[PLAYER].set_pos(new_x, new_y);
+                objects[PLAYER].set_pos(cx, cy);
             } else {
                 // connect all future rooms to the previous one
 
@@ -445,6 +438,15 @@ fn main() {
         let player_action = handle_keys(&mut tcod, &game, &mut objects);
         if player_action == PlayerAction::Exit {
             break;
+        }
+
+        // monster turns
+        if objects[PLAYER].alive && player_action != PlayerAction::DidntTakeTurn {
+            for object in &objects {
+                if (object as *const _) != (&objects[PLAYER] as *const _) {
+                    println!("The {} growls!", object.name);
+                }
+            }
         }
 
     }
