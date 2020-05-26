@@ -259,7 +259,7 @@ fn make_map(objects: &mut Vec<Object>) -> Map {
             rooms.push(new_room);
         }
     }
-
+    
     map
 }
 
