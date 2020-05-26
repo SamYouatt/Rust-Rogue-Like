@@ -27,6 +27,10 @@ const FOV_ALGO: FovAlgorithm = FovAlgorithm::Basic;
 const FOV_LIGHT_WALLS: bool = true;
 const TORCH_RADIUS: i32 = 10;
 
+const MAX_ROOM_MONSTERS: i32 = 3;
+
+const PLAYER: usize = 0;
+
 struct Tcod {
     root: Root,
     con: Offscreen,
@@ -121,6 +125,15 @@ impl Object {
         con.set_default_foreground(self.color);
         con.put_char(self.x, self.y, self.char, BackgroundFlag::None);
     }
+
+    pub fn pos(&self) -> (i32, i32) {
+        (self.x, self.y)
+    }
+
+    pub fn set_pos(&mut self, x: i32, y: i32) {
+        self.x = x;
+        self.y = y;
+    }
 }
 
 fn create_room(room: Rect, map: &mut Map) {
@@ -129,6 +142,24 @@ fn create_room(room: Rect, map: &mut Map) {
         for y in (room.y1 + 1)..room.y2 {
             map[x as usize][y as usize] = Tile::empty();
         }
+    }
+}
+
+fn place_objects(room: Rect, objects: &mut Vec<Object>) {
+    let num_monsters = rand::thread_rng().gen_range(0, MAX_ROOM_MONSTERS + 1);
+
+    for _ in 0..num_monsters {
+        let x = rand::thread_rng().gen_range(room.x1 + 1, room.x2);
+        let y = rand::thread_rng().gen_range(room.y1 + 1, room.y2);
+
+        let monster = if rand::random::<f32>() < 0.8 {
+            // 80% chance to create an orc
+            Object::new(x, y, 'o', tcod::colors::DESATURATED_GREEN)
+        } else {
+            Object::new(x, y, 'T', tcod::colors::DARKER_GREEN)
+        };
+
+        objects.push(monster);
     }
 }
 
@@ -146,7 +177,7 @@ fn create_v_tunnel(y1: i32, y2: i32, x: i32, map: &mut Map) {
     }
 }
 
-fn make_map(player: &mut Object) -> Map {
+fn make_map(objects: &mut Vec<Object>) -> Map {
     // fill map with blocked tiles
     let mut map = vec![vec![Tile::wall(); MAP_HEIGHT as usize]; MAP_WIDTH as usize];
 
@@ -164,10 +195,10 @@ fn make_map(player: &mut Object) -> Map {
         let height = rand::thread_rng().gen_range(ROOM_MIN_SIZE, ROOM_MAX_SIZE + 1);
 
         // random positions within bounds
-        let x = rand::thread_rng().gen_range(0, MAP_WIDTH - width);
-        let y = rand::thread_rng().gen_range(0, MAP_HEIGHT - height);
+        let new_x = rand::thread_rng().gen_range(0, MAP_WIDTH - width);
+        let new_y = rand::thread_rng().gen_range(0, MAP_HEIGHT - height);
 
-        let new_room = Rect::new(x, y, width, height);
+        let new_room = Rect::new(new_x, new_y, width, height);
 
         // check for intersections with rooms
         let failed = rooms
@@ -177,13 +208,14 @@ fn make_map(player: &mut Object) -> Map {
         if !failed {
             create_room(new_room, &mut map);
 
+            place_objects(new_room, objects);
+
             let (cx, cy) = new_room.center();
 
             
             if rooms.is_empty() {
                 // place the player in the first room
-                player.x = cx;
-                player.y = cy;
+                objects[PLAYER].set_pos(new_x, new_y);
             } else {
                 // connect all future rooms to the previous one
 
@@ -210,7 +242,7 @@ fn make_map(player: &mut Object) -> Map {
 
 fn render_all(tcod: &mut Tcod, game: &mut Game, objects: &[Object], fov_recompute: bool) {
     if fov_recompute {
-        let player = &objects[0];
+        let player = &objects[PLAYER];
         tcod.fov
             .compute_fov(player.x, player.y, TORCH_RADIUS, FOV_LIGHT_WALLS, FOV_ALGO);
     }
@@ -297,12 +329,10 @@ fn main() {
 
     let player = Object::new(0, 0, '@', WHITE);
 
-    let npc = Object::new(SCREEN_WIDTH / 2 - 5, SCREEN_HEIGHT / 2, '@', YELLOW);
-
-    let mut objects = [player, npc];
+    let mut objects = vec![player];
 
     let mut game = Game {
-        map: make_map(&mut objects[0]),
+        map: make_map(&mut objects),
     };
 
     for y in 0..MAP_HEIGHT {
@@ -332,14 +362,14 @@ fn main() {
         );
 
         // only need to recompute fov if the player has changed position
-        let fov_recompute = previous_player_position != (objects[0].x, objects[0].y);
+        let fov_recompute = previous_player_position != (objects[PLAYER].pos());
         render_all(&mut tcod, &mut game, &objects, fov_recompute);
 
         tcod.root.flush();
         // tcod.root.wait_for_keypress(true);
 
-        let player = &mut objects[0];
-        let exit = handle_keys(&mut tcod, player, &game);       
+        // let player = &mut objects[0];
+        let exit = handle_keys(&mut tcod, &mut objects[PLAYER], &game);       
         
         if exit { break; }
     }
