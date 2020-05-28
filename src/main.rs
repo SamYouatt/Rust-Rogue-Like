@@ -31,13 +31,13 @@ const MAX_ROOM_MONSTERS: i32 = 3;
 
 const PLAYER: usize = 0;
 
+type Map = Vec<Vec<Tile>>;
+
 struct Tcod {
     root: Root,
     con: Offscreen,
     fov: FovMap,
 }
-
-type Map = Vec<Vec<Tile>>;
 
 struct Game {
     map: Map,
@@ -110,6 +110,8 @@ struct Object {
     name: String,
     blocks: bool,
     alive: bool,
+    fighter: Option<Fighter>,
+    ai: Option<Ai>,
 }
 
 impl Object {
@@ -122,6 +124,8 @@ impl Object {
             name: name.into(),
             blocks,
             alive: false,
+            fighter: None,
+            ai: None,
         }
     }
 
@@ -138,6 +142,19 @@ impl Object {
         self.x = x;
         self.y = y;
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Fighter {
+    max_hp: i32,
+    hp: i32,
+    defense: i32,
+    power: i32,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum Ai {
+    Basic,
 }
 
 fn is_blocked(x: i32, y: i32, map: &Map, objects: &mut [Object]) -> bool {
@@ -176,9 +193,25 @@ fn place_objects(room: Rect, map: &Map, objects: &mut Vec<Object>) {
         if !is_blocked(x, y, map, objects) {
             let mut monster = if rand::random::<f32>() < 0.8 {
                 // 80% chance to create an orc
-                Object::new(x, y, 'o', tcod::colors::DESATURATED_GREEN, "orc", true)
+                let mut orc = Object::new(x, y, 'o', tcod::colors::DESATURATED_GREEN, "orc", true);
+                orc.fighter = Some(Fighter {
+                    max_hp: 10,
+                    hp: 10,
+                    defense: 0,
+                    power: 3,
+                });
+                orc.ai = Some(Ai::Basic);
+                orc
             } else {
-                Object::new(x, y, 'T', tcod::colors::DARKER_GREEN, "troll", true)
+                let mut troll = Object::new(x, y, 'T', tcod::colors::DARKER_GREEN, "troll", true);
+                troll.fighter = Some(Fighter {
+                    max_hp: 16,
+                    hp: 16,
+                    defense: 1,
+                    power: 4,
+                });
+                troll.ai = Some(Ai::Basic);
+                troll
             };
             monster.alive = true;
             objects.push(monster);
@@ -402,6 +435,12 @@ fn main() {
 
     let mut player = Object::new(0, 0, '@', WHITE, "player", true);
     player.alive = true;
+    player.fighter = Some(Fighter {
+        max_hp: 30,
+        hp: 30,
+        defense: 2,
+        power: 5,
+    });
 
     let mut objects = vec![player];
 
